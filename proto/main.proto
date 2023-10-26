@@ -1,0 +1,20 @@
+syntax="proto3";
+package proto;
+option go_package = "github.com/charafzellou/grpc-golang-template";
+ 
+message InputRequest {
+   string name = 1;
+   string description = 2;
+   bool done = 3;
+}
+ 
+message OutputRequest {
+   string name = 1;
+   string description = 2;
+   bool done = 3;
+   string id = 4;
+}
+ 
+service RequestService {
+   rpc RequestMethod(InputRequest) returns (OutputRequest) {}
+}
