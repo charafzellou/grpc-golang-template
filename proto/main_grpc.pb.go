@@ -19,92 +19,234 @@ import (
 const _ = grpc.SupportPackageIsVersion8
 
 const (
-	RequestService_RequestMethod_FullMethodName = "/proto.RequestService/RequestMethod"
+	BlockchainService_RegisterClient_FullMethodName     = "/blockchain.BlockchainService/RegisterClient"
+	BlockchainService_SubscribeForBaking_FullMethodName = "/blockchain.BlockchainService/SubscribeForBaking"
+	BlockchainService_GetLastBlockInfo_FullMethodName   = "/blockchain.BlockchainService/GetLastBlockInfo"
+	BlockchainService_AddTransaction_FullMethodName     = "/blockchain.BlockchainService/AddTransaction"
 )
 
-// RequestServiceClient is the client API for RequestService service.
+// BlockchainServiceClient is the client API for BlockchainService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type RequestServiceClient interface {
-	RequestMethod(ctx context.Context, in *InputRequest, opts ...grpc.CallOption) (*OutputRequest, error)
+type BlockchainServiceClient interface {
+	RegisterClient(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error)
+	SubscribeForBaking(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (BlockchainService_SubscribeForBakingClient, error)
+	GetLastBlockInfo(ctx context.Context, in *LastBlockRequest, opts ...grpc.CallOption) (*LastBlockResponse, error)
+	AddTransaction(ctx context.Context, in *TransactionData, opts ...grpc.CallOption) (*TransactionResponse, error)
 }
 
-type requestServiceClient struct {
+type blockchainServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewRequestServiceClient(cc grpc.ClientConnInterface) RequestServiceClient {
-	return &requestServiceClient{cc}
+func NewBlockchainServiceClient(cc grpc.ClientConnInterface) BlockchainServiceClient {
+	return &blockchainServiceClient{cc}
 }
 
-func (c *requestServiceClient) RequestMethod(ctx context.Context, in *InputRequest, opts ...grpc.CallOption) (*OutputRequest, error) {
+func (c *blockchainServiceClient) RegisterClient(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*RegisterResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(OutputRequest)
-	err := c.cc.Invoke(ctx, RequestService_RequestMethod_FullMethodName, in, out, cOpts...)
+	out := new(RegisterResponse)
+	err := c.cc.Invoke(ctx, BlockchainService_RegisterClient_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// RequestServiceServer is the server API for RequestService service.
-// All implementations must embed UnimplementedRequestServiceServer
+func (c *blockchainServiceClient) SubscribeForBaking(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (BlockchainService_SubscribeForBakingClient, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &BlockchainService_ServiceDesc.Streams[0], BlockchainService_SubscribeForBaking_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &blockchainServiceSubscribeForBakingClient{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type BlockchainService_SubscribeForBakingClient interface {
+	Recv() (*BakingUpdate, error)
+	grpc.ClientStream
+}
+
+type blockchainServiceSubscribeForBakingClient struct {
+	grpc.ClientStream
+}
+
+func (x *blockchainServiceSubscribeForBakingClient) Recv() (*BakingUpdate, error) {
+	m := new(BakingUpdate)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *blockchainServiceClient) GetLastBlockInfo(ctx context.Context, in *LastBlockRequest, opts ...grpc.CallOption) (*LastBlockResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(LastBlockResponse)
+	err := c.cc.Invoke(ctx, BlockchainService_GetLastBlockInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *blockchainServiceClient) AddTransaction(ctx context.Context, in *TransactionData, opts ...grpc.CallOption) (*TransactionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TransactionResponse)
+	err := c.cc.Invoke(ctx, BlockchainService_AddTransaction_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// BlockchainServiceServer is the server API for BlockchainService service.
+// All implementations must embed UnimplementedBlockchainServiceServer
 // for forward compatibility
-type RequestServiceServer interface {
-	RequestMethod(context.Context, *InputRequest) (*OutputRequest, error)
-	mustEmbedUnimplementedRequestServiceServer()
+type BlockchainServiceServer interface {
+	RegisterClient(context.Context, *RegisterRequest) (*RegisterResponse, error)
+	SubscribeForBaking(*SubscribeRequest, BlockchainService_SubscribeForBakingServer) error
+	GetLastBlockInfo(context.Context, *LastBlockRequest) (*LastBlockResponse, error)
+	AddTransaction(context.Context, *TransactionData) (*TransactionResponse, error)
+	mustEmbedUnimplementedBlockchainServiceServer()
 }
 
-// UnimplementedRequestServiceServer must be embedded to have forward compatible implementations.
-type UnimplementedRequestServiceServer struct {
+// UnimplementedBlockchainServiceServer must be embedded to have forward compatible implementations.
+type UnimplementedBlockchainServiceServer struct {
 }
 
-func (UnimplementedRequestServiceServer) RequestMethod(context.Context, *InputRequest) (*OutputRequest, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RequestMethod not implemented")
+func (UnimplementedBlockchainServiceServer) RegisterClient(context.Context, *RegisterRequest) (*RegisterResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RegisterClient not implemented")
 }
-func (UnimplementedRequestServiceServer) mustEmbedUnimplementedRequestServiceServer() {}
+func (UnimplementedBlockchainServiceServer) SubscribeForBaking(*SubscribeRequest, BlockchainService_SubscribeForBakingServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeForBaking not implemented")
+}
+func (UnimplementedBlockchainServiceServer) GetLastBlockInfo(context.Context, *LastBlockRequest) (*LastBlockResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetLastBlockInfo not implemented")
+}
+func (UnimplementedBlockchainServiceServer) AddTransaction(context.Context, *TransactionData) (*TransactionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddTransaction not implemented")
+}
+func (UnimplementedBlockchainServiceServer) mustEmbedUnimplementedBlockchainServiceServer() {}
 
-// UnsafeRequestServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to RequestServiceServer will
+// UnsafeBlockchainServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to BlockchainServiceServer will
 // result in compilation errors.
-type UnsafeRequestServiceServer interface {
-	mustEmbedUnimplementedRequestServiceServer()
+type UnsafeBlockchainServiceServer interface {
+	mustEmbedUnimplementedBlockchainServiceServer()
 }
 
-func RegisterRequestServiceServer(s grpc.ServiceRegistrar, srv RequestServiceServer) {
-	s.RegisterService(&RequestService_ServiceDesc, srv)
+func RegisterBlockchainServiceServer(s grpc.ServiceRegistrar, srv BlockchainServiceServer) {
+	s.RegisterService(&BlockchainService_ServiceDesc, srv)
 }
 
-func _RequestService_RequestMethod_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(InputRequest)
+func _BlockchainService_RegisterClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(RequestServiceServer).RequestMethod(ctx, in)
+		return srv.(BlockchainServiceServer).RegisterClient(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: RequestService_RequestMethod_FullMethodName,
+		FullMethod: BlockchainService_RegisterClient_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(RequestServiceServer).RequestMethod(ctx, req.(*InputRequest))
+		return srv.(BlockchainServiceServer).RegisterClient(ctx, req.(*RegisterRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// RequestService_ServiceDesc is the grpc.ServiceDesc for RequestService service.
+func _BlockchainService_SubscribeForBaking_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(BlockchainServiceServer).SubscribeForBaking(m, &blockchainServiceSubscribeForBakingServer{ServerStream: stream})
+}
+
+type BlockchainService_SubscribeForBakingServer interface {
+	Send(*BakingUpdate) error
+	grpc.ServerStream
+}
+
+type blockchainServiceSubscribeForBakingServer struct {
+	grpc.ServerStream
+}
+
+func (x *blockchainServiceSubscribeForBakingServer) Send(m *BakingUpdate) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _BlockchainService_GetLastBlockInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(LastBlockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BlockchainServiceServer).GetLastBlockInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BlockchainService_GetLastBlockInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BlockchainServiceServer).GetLastBlockInfo(ctx, req.(*LastBlockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BlockchainService_AddTransaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransactionData)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BlockchainServiceServer).AddTransaction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BlockchainService_AddTransaction_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BlockchainServiceServer).AddTransaction(ctx, req.(*TransactionData))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// BlockchainService_ServiceDesc is the grpc.ServiceDesc for BlockchainService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var RequestService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "proto.RequestService",
-	HandlerType: (*RequestServiceServer)(nil),
+var BlockchainService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "blockchain.BlockchainService",
+	HandlerType: (*BlockchainServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "RequestMethod",
-			Handler:    _RequestService_RequestMethod_Handler,
+			MethodName: "RegisterClient",
+			Handler:    _BlockchainService_RegisterClient_Handler,
+		},
+		{
+			MethodName: "GetLastBlockInfo",
+			Handler:    _BlockchainService_GetLastBlockInfo_Handler,
+		},
+		{
+			MethodName: "AddTransaction",
+			Handler:    _BlockchainService_AddTransaction_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "SubscribeForBaking",
+			Handler:       _BlockchainService_SubscribeForBaking_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "proto/main.proto",
 }
