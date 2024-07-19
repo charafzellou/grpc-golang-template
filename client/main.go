@@ -49,6 +49,7 @@ func main() {
 		log.Printf("Last block info: %v", res)
 	case "addtransaction":
 		res, err := client.AddTransaction(ctx, &pb.Transaction{
+			Uuid:     *uuid,
 			Sender:   "sender_uuid",
 			Receiver: "receiver_uuid",
 			Amount:   10,

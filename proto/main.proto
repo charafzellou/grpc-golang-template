@@ -35,10 +35,11 @@ message BlockInfo {
 }
 
 message Transaction {
-    string sender = 1;
-    string receiver = 2;
-    int32 amount = 3;
-    string data = 4;
+    string uuid = 1;
+    string sender = 2;
+    string receiver = 3;
+    int32 amount = 4;
+    string data = 5;
 }
 
 message BakeRequest {
