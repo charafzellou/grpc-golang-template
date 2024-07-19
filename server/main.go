@@ -5,14 +5,15 @@ import (
 	"log"
 	"net"
 
-	pb "github.com/charafzellou/grpc-golang-template/proto"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+
+	pb "github.com/charafzellou/grpc-golang-template/proto"
 )
 
 const (
 	// Port for gRPC server to listen to
-	PORT = ":50051"
+	PORT = "localhost:50051"
 )
 
 type RequestServer struct {

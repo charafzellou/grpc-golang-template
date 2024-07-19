@@ -5,10 +5,10 @@ import (
 	"log"
 	"time"
 
-	pb "github.com/charafzellou/grpc-golang-template/proto"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	pb "github.com/charafzellou/grpc-golang-template/proto"
 )
 
 const (
@@ -22,18 +22,14 @@ type TodoTask struct {
 }
 
 func main() {
-	conn, err := grpc.Dial(ADDRESS, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
+	conn, err := grpc.NewClient(ADDRESS, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("did not connect : %v", err)
+		log.Fatalf("Did not connect : %v", err)
 	}
-
-	defer conn.Close()
 
 	c := pb.NewRequestServiceClient(conn)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-
-	defer cancel()
 
 	todos := []TodoTask{
 		{Name: "Code review", Description: "Review new feature code", Done: false},
@@ -46,7 +42,7 @@ func main() {
 	for _, todo := range todos {
 		res, err := c.RequestMethod(ctx, &pb.InputRequest{Name: todo.Name, Description: todo.Description, Done: todo.Done})
 		if err != nil {
-			log.Fatalf("could not create user: %v", err)
+			log.Fatalf("Could not create user: \n%v", err)
 		}
 
 		log.Printf(`
@@ -56,4 +52,7 @@ func main() {
            Done : %v,
        `, res.GetId(), res.GetName(), res.GetDescription(), res.GetDone())
 	}
+
+	defer conn.Close()
+	defer cancel()
 }
