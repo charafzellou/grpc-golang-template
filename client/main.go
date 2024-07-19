@@ -15,15 +15,15 @@ func main() {
 	method := flag.String("method", "register", "You can use the following RPC methods : register, subscribe, getlastblock, addtransaction, bakeblock, confirmbake")
 	uuid := flag.String("uuid", "", "UUID of the client")
 	flag.Parse()
-	log.Printf("Calling %s on '35.241.224.46:50051'", *method)
+	log.Printf("Calling %s on 'localhost:50051'", *method)
 
-	conn, err := grpc.NewClient("35.241.224.46:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
 	client := pb.NewBlockchainClient(conn)
-	log.Printf("Connected to server '35.241.224.46:50051'")
+	log.Printf("Connected to server 'localhost:50051'")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
