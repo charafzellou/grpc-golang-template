@@ -30,6 +30,7 @@ type server struct {
 	pb.UnimplementedBlockchainServer
 	mu           sync.Mutex
 	clients      map[string]int32
+	clientsFunds map[string]int32
 	currentBaker string
 	blocks       []*Block
 	transactions []*pb.Transaction
@@ -39,10 +40,11 @@ func (s *server) Register(ctx context.Context, in *pb.Empty) (*pb.RegisterRespon
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	uuid := generateUUID()
-	reputation := int32(100)
-	s.clients[uuid] = reputation
-	log.Printf("Client %s registered with reputation %d", uuid, reputation)
-	return &pb.RegisterResponse{Uuid: uuid, Reputation: reputation}, nil
+	s.clients[uuid] = int32(100)
+	s.clientsFunds[uuid] = int32(100)
+	log.Printf("Client %s registered with reputation %d", uuid, s.clients[uuid])
+	log.Printf("Client %s current funds are %d,00 €", uuid, s.clientsFunds[uuid])
+	return &pb.RegisterResponse{Uuid: uuid, Reputation: s.clients[uuid]}, nil
 }
 
 func (s *server) Subscribe(ctx context.Context, in *pb.SubscribeRequest) (*pb.SubscribeResponse, error) {
@@ -75,6 +77,25 @@ func (s *server) GetLastBlock(ctx context.Context, in *pb.Empty) (*pb.BlockInfo,
 func (s *server) AddTransaction(ctx context.Context, in *pb.Transaction) (*pb.Empty, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, exists := s.clients[in.Sender]; !exists {
+		return &pb.Empty{}, fmt.Errorf("Sender %s not registered", in.Sender)
+	} else if _, exists := s.clients[in.Receiver]; !exists {
+		return &pb.Empty{}, fmt.Errorf("Receiver %s not registered", in.Receiver)
+	}
+	if in.Sender == in.Receiver {
+		return &pb.Empty{}, fmt.Errorf("Sender and receiver cannot be the same")
+	} else if in.Amount <= 0 {
+		return &pb.Empty{}, fmt.Errorf("Amount must be greater than 0")
+	} else if in.Amount > 100 {
+		return &pb.Empty{}, fmt.Errorf("Amount must be less than 100")
+	} else if s.clientsFunds[in.Sender] < in.Amount {
+		return &pb.Empty{}, fmt.Errorf("Insufficient funds")
+	} else {
+		s.clientsFunds[in.Sender] -= in.Amount
+		log.Printf("Sender %s current funds are %d,00 €", in.Sender, s.clientsFunds[in.Sender])
+		s.clientsFunds[in.Receiver] += in.Amount
+		log.Printf("Receiver %s current funds are %d,00 €", in.Receiver, s.clientsFunds[in.Receiver])
+	}
 	s.transactions = append(s.transactions, in)
 	log.Printf("Transaction added: %v", in)
 	return &pb.Empty{}, nil
@@ -85,6 +106,8 @@ func (s *server) BakeBlock(ctx context.Context, in *pb.BakeRequest) (*pb.BakeRes
 	defer s.mu.Unlock()
 	if s.currentBaker != "" {
 		return &pb.BakeResponse{Uuid: s.currentBaker, Message: "Baking in progress..."}, nil
+	} else if len(s.transactions) == 0 {
+		return &pb.BakeResponse{Message: "No transactions to bake"}, nil
 	}
 	if _, exists := s.clients[in.Uuid]; !exists {
 		return &pb.BakeResponse{Message: "Client not registered"}, nil
@@ -99,17 +122,25 @@ func (s *server) ConfirmBake(ctx context.Context, in *pb.ConfirmRequest) (*pb.Em
 	defer s.mu.Unlock()
 	if in.Uuid == s.currentBaker {
 		s.clients[in.Uuid]++
+		s.clientsFunds[in.Uuid] += 50
 		s.currentBaker = ""
 		s.mineBlock()
 		log.Printf("Client %s confirmed block bake", in.Uuid)
+		log.Printf("Client %s current reputation is %d", in.Uuid, s.clients[in.Uuid])
+		log.Printf("Client %s current funds are %d,00 €", in.Uuid, s.clientsFunds[in.Uuid])
 	} else {
 		s.clients[in.Uuid]--
-		log.Printf("Client %s is not the chosen baker", in.Uuid)
+		s.clientsFunds[in.Uuid] -= 150
+		log.Printf("Client %s is not the chosen baker !", in.Uuid)
+		log.Printf("Client %s current reputation is %d", in.Uuid, s.clients[in.Uuid])
+		log.Printf("Client %s current funds are %d,00 €", in.Uuid, s.clientsFunds[in.Uuid])
 	}
 	return &pb.Empty{}, nil
 }
 
 func (s *server) mineBlock() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	lastBlock := s.blocks[len(s.blocks)-1]
 	newBlock := &Block{
 		Number:            lastBlock.Number + 1,
@@ -130,9 +161,9 @@ func generateUUID() string {
 func main() {
 	lis, err := net.Listen("tcp", portNumber)
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		log.Fatalf("Failed to listen on port %s, %v", portNumber, err)
 	}
-	log.Println("Server listening on port 50051")
+	log.Println("Server listening on port 50051...")
 	s := grpc.NewServer()
 	initialBlock := &Block{
 		Number:            0,
@@ -142,11 +173,12 @@ func main() {
 		Transactions:      []*pb.Transaction{},
 	}
 	srv := &server{
-		clients: make(map[string]int32),
-		blocks:  []*Block{initialBlock},
+		clients:      make(map[string]int32),
+		clientsFunds: make(map[string]int32),
+		blocks:       []*Block{initialBlock},
 	}
 	pb.RegisterBlockchainServer(s, srv)
-	log.Println("Server started successfully")
+	log.Println("Server started successfully!")
 	go func() {
 		for {
 			time.Sleep(30 * time.Second)
@@ -154,6 +186,8 @@ func main() {
 			if srv.currentBaker != "" {
 				log.Println("Backer has been selected: ", srv.currentBaker)
 				srv.mineBlock()
+				log.Println("Current reputation of clients: ", srv.clients)
+				log.Println("Current funds of clients: ", srv.clientsFunds)
 			}
 			srv.mu.Unlock()
 		}
