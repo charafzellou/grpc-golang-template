@@ -1,46 +1,55 @@
 syntax = "proto3";
 
-package blockchain;
-
+package grpc_golang_template;
 option go_package = "github.com/charafzellou/grpc-golang-template";
 
-service BlockchainService {
-  rpc RegisterClient (RegisterRequest) returns (RegisterResponse) {}
-  rpc SubscribeForBaking (SubscribeRequest) returns (stream BakingUpdate) {}
-  rpc GetLastBlockInfo (LastBlockRequest) returns (LastBlockResponse) {}
-  rpc AddTransaction (TransactionData) returns (TransactionResponse) {}
+service Blockchain {
+    rpc Register (Empty) returns (RegisterResponse);
+    rpc Subscribe (SubscribeRequest) returns (SubscribeResponse);
+    rpc GetLastBlock (Empty) returns (BlockInfo);
+    rpc AddTransaction (Transaction) returns (Empty);
+    rpc BakeBlock (BakeRequest) returns (BakeResponse);
+    rpc ConfirmBake (ConfirmRequest) returns (Empty);
 }
 
-message RegisterRequest {}
+message Empty {}
 
 message RegisterResponse {
-  string uuid = 1;
-  double reputation_score = 2;
+    string uuid = 1;
+    int32 reputation = 2;
 }
 
 message SubscribeRequest {
-  string client_uuid = 1;
+    string uuid = 1;
 }
 
-message BakingUpdate {
-  bool chosen_as_baker = 1;
+message SubscribeResponse {
+    string message = 1;
 }
 
-message LastBlockRequest {}
-
-message LastBlockResponse {
-  string block_hash = 1;
-  int64 block_height = 2;
-  // Add other relevant block information
+message BlockInfo {
+    string block_hash = 1;
+    string previous_block_hash = 2;
+    int32 block_number = 3;
+    string data = 4;
 }
 
-message TransactionData {
-  string sender = 1;
-  string recipient = 2;
-  double amount = 3;
+message Transaction {
+    string sender = 1;
+    string receiver = 2;
+    int32 amount = 3;
+    string data = 4;
 }
 
-message TransactionResponse {
-  bool success = 1;
-  string transaction_hash = 2;
+message BakeRequest {
+    string uuid = 1;
+}
+
+message BakeResponse {
+    string uuid = 1;
+    string message = 2;
+}
+
+message ConfirmRequest {
+    string uuid = 1;
 }

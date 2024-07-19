@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto"
 	"fmt"
 	"log"
 	"math/rand"
@@ -13,102 +14,151 @@ import (
 	"google.golang.org/grpc"
 )
 
+const (
+	portNumber = ":50051"
+)
+
+type Block struct {
+	Number            int32
+	PreviousBlockHash string
+	BlockHash         string
+	Data              string
+	Transactions      []*pb.Transaction
+}
+
 type server struct {
-	pb.UnimplementedBlockchainServiceServer
-	clients     map[string]*Client
-	clientsLock sync.Mutex
+	pb.UnimplementedBlockchainServer
+	mu           sync.Mutex
+	clients      map[string]int32
+	currentBaker string
+	blocks       []*Block
+	transactions []*pb.Transaction
 }
 
-type Client struct {
-	UUID            string
-	ReputationScore float64
-	BakingStream    pb.BlockchainService_SubscribeForBakingServer
-}
-
-func main() {
-	lis, err := net.Listen("tcp", ":50051")
-	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
-	}
-	s := grpc.NewServer()
-	blockchainServer := &server{
-		clients: make(map[string]*Client),
-	}
-	pb.RegisterBlockchainServiceServer(s, blockchainServer)
-
-	go selectBakerPeriodically(blockchainServer)
-
-	fmt.Println("Server is running on :50051")
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("Failed to serve: %v", err)
-	}
-}
-
-func (s *server) RegisterClient(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
+func (s *server) Register(ctx context.Context, in *pb.Empty) (*pb.RegisterResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	uuid := generateUUID()
-	s.clientsLock.Lock()
-	s.clients[uuid] = &Client{UUID: uuid, ReputationScore: 0}
-	s.clientsLock.Unlock()
-	return &pb.RegisterResponse{Uuid: uuid, ReputationScore: 0}, nil
+	reputation := int32(100)
+	s.clients[uuid] = reputation
+	log.Printf("Client %s registered with reputation %d", uuid, reputation)
+	return &pb.RegisterResponse{Uuid: uuid, Reputation: reputation}, nil
 }
 
-func (s *server) SubscribeForBaking(req *pb.SubscribeRequest, stream pb.BlockchainService_SubscribeForBakingServer) error {
-	s.clientsLock.Lock()
-	client, exists := s.clients[req.ClientUuid]
-	if !exists {
-		s.clientsLock.Unlock()
-		return fmt.Errorf("client not registered")
+func (s *server) Subscribe(ctx context.Context, in *pb.SubscribeRequest) (*pb.SubscribeResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.clients[in.Uuid]; !exists {
+		log.Printf("Client %s not registered: ", in.Uuid)
+		return &pb.SubscribeResponse{Message: "Client not registered"}, nil
 	}
-	client.BakingStream = stream
-	s.clientsLock.Unlock()
-
-	// Keep the stream open
-	<-stream.Context().Done()
-	return nil
+	log.Printf("Client %s subscribed: ", in.Uuid)
+	return &pb.SubscribeResponse{Message: "Subscribed successfully!"}, nil
 }
 
-func (s *server) GetLastBlockInfo(ctx context.Context, req *pb.LastBlockRequest) (*pb.LastBlockResponse, error) {
-	// Implement fetching last block info
-	return &pb.LastBlockResponse{BlockHash: "sample-hash", BlockHeight: 100}, nil
-}
-
-func (s *server) AddTransaction(ctx context.Context, req *pb.TransactionData) (*pb.TransactionResponse, error) {
-	// Implement adding transaction to mempool
-	return &pb.TransactionResponse{Success: true, TransactionHash: "sample-tx-hash"}, nil
-}
-
-func selectBakerPeriodically(s *server) {
-	ticker := time.NewTicker(30 * time.Second)
-	for range ticker.C {
-		s.clientsLock.Lock()
-		if len(s.clients) == 0 {
-			s.clientsLock.Unlock()
-			continue
-		}
-		randomIndex := rand.Intn(len(s.clients))
-		i := 0
-		var chosenClient *Client
-		for _, client := range s.clients {
-			if i == randomIndex {
-				chosenClient = client
-				break
-			}
-			i++
-		}
-		s.clientsLock.Unlock()
-
-		if chosenClient != nil && chosenClient.BakingStream != nil {
-			err := chosenClient.BakingStream.Send(&pb.BakingUpdate{ChosenAsBaker: true})
-			if err != nil {
-				log.Printf("Failed to send baking update to client %s: %v", chosenClient.UUID, err)
-			} else {
-				// Implement logic to wait for confirmation and update reputation
-			}
-		}
+func (s *server) GetLastBlock(ctx context.Context, in *pb.Empty) (*pb.BlockInfo, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.blocks) == 0 {
+		return &pb.BlockInfo{}, nil
 	}
+	lastBlock := s.blocks[len(s.blocks)-1]
+	log.Printf("Last block info: %v", lastBlock)
+	return &pb.BlockInfo{
+		BlockHash:         lastBlock.BlockHash,
+		PreviousBlockHash: lastBlock.PreviousBlockHash,
+		BlockNumber:       lastBlock.Number,
+		Data:              lastBlock.Data,
+	}, nil
+}
+
+func (s *server) AddTransaction(ctx context.Context, in *pb.Transaction) (*pb.Empty, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.transactions = append(s.transactions, in)
+	log.Printf("Transaction added: %v", in)
+	return &pb.Empty{}, nil
+}
+
+func (s *server) BakeBlock(ctx context.Context, in *pb.BakeRequest) (*pb.BakeResponse, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.currentBaker != "" {
+		return &pb.BakeResponse{Uuid: s.currentBaker, Message: "Baking in progress..."}, nil
+	}
+	if _, exists := s.clients[in.Uuid]; !exists {
+		return &pb.BakeResponse{Message: "Client not registered"}, nil
+	}
+	s.currentBaker = in.Uuid
+	log.Printf("Client %s is baking a block...", in.Uuid)
+	return &pb.BakeResponse{Uuid: s.currentBaker, Message: "You have been chosen to bake a block !"}, nil
+}
+
+func (s *server) ConfirmBake(ctx context.Context, in *pb.ConfirmRequest) (*pb.Empty, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if in.Uuid == s.currentBaker {
+		s.clients[in.Uuid]++
+		s.currentBaker = ""
+		s.mineBlock()
+		log.Printf("Client %s confirmed block bake", in.Uuid)
+	} else {
+		s.clients[in.Uuid]--
+		log.Printf("Client %s is not the chosen baker", in.Uuid)
+	}
+	return &pb.Empty{}, nil
+}
+
+func (s *server) mineBlock() {
+	lastBlock := s.blocks[len(s.blocks)-1]
+	newBlock := &Block{
+		Number:            lastBlock.Number + 1,
+		PreviousBlockHash: lastBlock.BlockHash,
+		BlockHash:         string(crypto.SHA256.New().Sum([]byte(generateUUID()))),
+		Data:              string(len(s.transactions)),
+		Transactions:      s.transactions,
+	}
+	s.blocks = append(s.blocks, newBlock)
+	s.transactions = nil
+	log.Printf("Block mined: %v", newBlock)
 }
 
 func generateUUID() string {
-	// Implement UUID generation
-	return "sample-uuid"
+	return fmt.Sprintf("%d", rand.Int63())
+}
+
+func main() {
+	lis, err := net.Listen("tcp", portNumber)
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+	log.Println("Server listening on port 50051")
+	s := grpc.NewServer()
+	initialBlock := &Block{
+		Number:            0,
+		PreviousBlockHash: "",
+		BlockHash:         generateUUID(),
+		Data:              "Genesis block",
+		Transactions:      []*pb.Transaction{},
+	}
+	srv := &server{
+		clients: make(map[string]int32),
+		blocks:  []*Block{initialBlock},
+	}
+	pb.RegisterBlockchainServer(s, srv)
+	log.Println("Server started successfully")
+	go func() {
+		for {
+			time.Sleep(30 * time.Second)
+			srv.mu.Lock()
+			if srv.currentBaker != "" {
+				log.Println("Backer has been selected: ", srv.currentBaker)
+				srv.mineBlock()
+			}
+			srv.mu.Unlock()
+		}
+	}()
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("Failed to serve: %v", err)
+	}
 }

@@ -3,89 +3,74 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
+	"time"
 
 	pb "github.com/charafzellou/grpc-golang-template/proto"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-var (
-	serverAddr = flag.String("server_addr", "localhost:50051", "The server address in the format of host:port")
-	action     = flag.String("action", "", "Action to perform: register, subscribe, getlastblock, addtransaction")
-)
-
 func main() {
+	method := flag.String("method", "register", "You can use the following RPC methods : register, subscribe, getlastblock, addtransaction, bakeblock, confirmbake")
+	uuid := flag.String("uuid", "", "UUID of the client")
 	flag.Parse()
+	log.Printf("Calling %s on '35.241.224.46:50051'", *method)
 
-	conn, err := grpc.NewClient(*serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient("35.241.224.46:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("Failed to connect: %v", err)
+		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
+	client := pb.NewBlockchainClient(conn)
+	log.Printf("Connected to server '35.241.224.46:50051'")
 
-	client := pb.NewBlockchainServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
-	ctx := context.Background()
-
-	switch *action {
+	switch *method {
 	case "register":
-		registerClient(ctx, client)
-	case "subscribe":
-		subscribeForBaking(ctx, client)
-	case "getlastblock":
-		getLastBlockInfo(ctx, client)
-	case "addtransaction":
-		addTransaction(ctx, client)
-	default:
-		log.Fatalf("Unknown action: %s", *action)
-	}
-}
-
-func registerClient(ctx context.Context, client pb.BlockchainServiceClient) {
-	resp, err := client.RegisterClient(ctx, &pb.RegisterRequest{})
-	if err != nil {
-		log.Fatalf("Failed to register: %v", err)
-	}
-	fmt.Printf("Registered with UUID: %s, Reputation Score: %.2f\n", resp.Uuid, resp.ReputationScore)
-}
-
-func subscribeForBaking(ctx context.Context, client pb.BlockchainServiceClient) {
-	stream, err := client.SubscribeForBaking(ctx, &pb.SubscribeRequest{ClientUuid: "your-uuid-here"})
-	if err != nil {
-		log.Fatalf("Failed to subscribe: %v", err)
-	}
-
-	for {
-		update, err := stream.Recv()
+		res, err := client.Register(ctx, &pb.Empty{})
 		if err != nil {
-			log.Fatalf("Failed to receive update: %v", err)
+			log.Fatalf("could not register: %v", err)
 		}
-		if update.ChosenAsBaker {
-			fmt.Println("Chosen as baker! Confirming...")
-			// Implement confirmation logic here
+		log.Printf("Registered with UUID: %s, Reputation: %d", res.GetUuid(), res.GetReputation())
+	case "subscribe":
+		res, err := client.Subscribe(ctx, &pb.SubscribeRequest{Uuid: *uuid})
+		if err != nil {
+			log.Fatalf("could not subscribe: %v", err)
 		}
+		log.Printf("Subscription response: %s", res.GetMessage())
+	case "getlastblock":
+		res, err := client.GetLastBlock(ctx, &pb.Empty{})
+		if err != nil {
+			log.Fatalf("could not get last block: %v", err)
+		}
+		log.Printf("Last block info: %v", res)
+	case "addtransaction":
+		res, err := client.AddTransaction(ctx, &pb.Transaction{
+			Sender:   "sender_uuid",
+			Receiver: "receiver_uuid",
+			Amount:   10,
+			Data:     "transaction_data",
+		})
+		if err != nil {
+			log.Fatalf("could not add transaction: %v", err)
+		}
+		log.Println("Transaction added successfully: ", res)
+	case "bakeblock":
+		res, err := client.BakeBlock(ctx, &pb.BakeRequest{Uuid: *uuid})
+		if err != nil {
+			log.Fatalf("could not bake block: %v", err)
+		}
+		log.Printf("Bake block response: %s", res.GetMessage())
+	case "confirmbake":
+		_, err := client.ConfirmBake(ctx, &pb.ConfirmRequest{Uuid: *uuid})
+		if err != nil {
+			log.Fatalf("could not confirm bake: %v", err)
+		}
+		log.Println("Block baking confirmed")
+	default:
+		log.Fatalf("Unknown method: %s", *method)
 	}
-}
-
-func getLastBlockInfo(ctx context.Context, client pb.BlockchainServiceClient) {
-	resp, err := client.GetLastBlockInfo(ctx, &pb.LastBlockRequest{})
-	if err != nil {
-		log.Fatalf("Failed to get last block info: %v", err)
-	}
-	fmt.Printf("Last Block - Hash: %s, Height: %d\n", resp.BlockHash, resp.BlockHeight)
-}
-
-func addTransaction(ctx context.Context, client pb.BlockchainServiceClient) {
-	resp, err := client.AddTransaction(ctx, &pb.TransactionData{
-		Sender:    "sender-address",
-		Recipient: "recipient-address",
-		Amount:    100.0,
-	})
-	if err != nil {
-		log.Fatalf("Failed to add transaction: %v", err)
-	}
-	fmt.Printf("Transaction added - Success: %v, Hash: %s\n", resp.Success, resp.TransactionHash)
 }
