@@ -1,10 +1,11 @@
 module github.com/charafzellou/grpc-golang-template
 
-go 1.22.5
+go 1.23.0
+
 toolchain go1.24.1
 
 require (
-	google.golang.org/grpc v1.72.0
+	google.golang.org/grpc v1.72.1
 	google.golang.org/protobuf v1.36.5
 )
 
